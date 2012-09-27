@@ -73,7 +73,8 @@ var self = window.StyleFix = {
 		try {
 			xhr.open('GET', url);
 			xhr.send(null);
-		} catch(e) {
+		}
+		catch(e) {
 			// Fallback to XDomainRequest if available
 			if(typeof XDomainRequest != "undefined") {
 				xhr = new XDomainRequest();
