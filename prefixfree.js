@@ -21,7 +21,7 @@ var self = window.StyleFix = {
 		catch(e) {
 			return;
 		}
-
+		
 		var url = link.href || link.getAttribute('data-href'),
 		    base = url.replace(/[^\/]+$/, ''),
 		    parent = link.parentNode,
@@ -33,49 +33,49 @@ var self = window.StyleFix = {
 				process();
 			}
 		};
-
+		
 		process = function() {
-				var css = xhr.responseText;
+			var css = xhr.responseText;
+			
+			if(css && link.parentNode && (!xhr.status || xhr.status < 400 || xhr.status > 600)) {
+				css = self.fix(css, true, link);
 				
-				if(css && link.parentNode && (!xhr.status || xhr.status < 400 || xhr.status > 600)) {
-					css = self.fix(css, true, link);
-					
-					// Convert relative URLs to absolute, if needed
-					if(base) {
-						css = css.replace(/url\(\s*?((?:"|')?)(.+?)\1\s*?\)/gi, function($0, quote, url) {
-							if(!/^([a-z]{3,10}:|\/|#)/i.test(url)) { // If url not absolute & not a hash
-								// May contain sequences like /../ and /./ but those DO work
-								return 'url("' + base + url + '")';
-							}
-							
-							return $0;						
-						});
-
-						// behavior URLs shoudn’t be converted (Issue #19)
-						// base should be escaped before added to RegExp (Issue #81)
-						var escaped_base = base.replace(/([\\\^\$*+[\]?{}.=!:(|)])/g,"\\$1");
-						css = css.replace(RegExp('\\b(behavior:\\s*?url\\(\'?"?)' + escaped_base, 'gi'), '$1');
+				// Convert relative URLs to absolute, if needed
+				if(base) {
+					css = css.replace(/url\(\s*?((?:"|')?)(.+?)\1\s*?\)/gi, function($0, quote, url) {
+						if(!/^([a-z]{3,10}:|\/|#)/i.test(url)) { // If url not absolute & not a hash
+							// May contain sequences like /../ and /./ but those DO work
+							return 'url("' + base + url + '")';
 						}
+						
+						return $0;
+					});
 					
-					var style = document.createElement('style');
-					style.textContent = css;
-					style.media = link.media;
-					style.disabled = link.disabled;
-					style.setAttribute('data-href', link.getAttribute('href'));
-					
-					parent.insertBefore(style, link);
-					parent.removeChild(link);
-					
-					style.media = link.media; // Duplicate is intentional. See issue #31
+					// behavior URLs shoudn’t be converted (Issue #19)
+					// base should be escaped before added to RegExp (Issue #81)
+					var escaped_base = base.replace(/([\\\^\$*+[\]?{}.=!:(|)])/g,"\\$1");
+					css = css.replace(RegExp('\\b(behavior:\\s*?url\\(\'?"?)' + escaped_base, 'gi'), '$1');
 				}
+				
+				var style = document.createElement('style');
+				style.textContent = css;
+				style.media = link.media;
+				style.disabled = link.disabled;
+				style.setAttribute('data-href', link.getAttribute('href'));
+				
+				parent.insertBefore(style, link);
+				parent.removeChild(link);
+				
+				style.media = link.media; // Duplicate is intentional. See issue #31
+			}
 		};
-
+		
 		try {
 			xhr.open('GET', url);
 			xhr.send(null);
-		} catch (e) {
+		} catch(e) {
 			// Fallback to XDomainRequest if available
-			if (typeof XDomainRequest != "undefined") {
+			if(typeof XDomainRequest != "undefined") {
 				xhr = new XDomainRequest();
 				xhr.onerror = xhr.onprogress = function() {};
 				xhr.onload = process;
@@ -86,9 +86,9 @@ var self = window.StyleFix = {
 		
 		link.setAttribute('data-inprogress', '');
 	},
-
+	
 	styleElement: function(style) {
-		if (style.hasAttribute('data-noprefix')) {
+		if(style.hasAttribute('data-noprefix')) {
 			return;
 		}
 		var disabled = style.disabled;
@@ -97,7 +97,7 @@ var self = window.StyleFix = {
 		
 		style.disabled = disabled;
 	},
-
+	
 	styleAttribute: function(element) {
 		var css = element.getAttribute('style');
 		
@@ -171,7 +171,7 @@ function fix(what, before, after, replacement, css) {
 	
 	if(what.length) {
 		var regex = RegExp(before + '(' + what.join('|') + ')' + after, 'gi');
-
+		
 		css = css.replace(regex, replacement);
 	}
 	
@@ -195,7 +195,7 @@ var self = window.PrefixFree = {
 		css = fix('properties', '(^|\\{|\\s|;)', '\\s*:', '$1' + prefix + '$2:', css);
 		
 		// Prefix properties *inside* values (issue #8)
-		if (self.properties.length) {
+		if(self.properties.length) {
 			var regex = RegExp('\\b(' + self.properties.join('|') + ')(?!:)', 'gi');
 			
 			css = fix('valueProperties', '\\b', ':(.+?);', function($0) {
@@ -248,10 +248,10 @@ var self = window.PrefixFree = {
  **************************************/
 (function() {
 	var prefixes = {},
-		properties = [],
-		shorthands = {},
-		style = getComputedStyle(document.documentElement, null),
-		dummy = document.createElement('div').style;
+	    properties = [],
+	    shorthands = {},
+	    style = getComputedStyle(document.documentElement, null),
+	    dummy = document.createElement('div').style;
 	
 	// Why are we doing this instead of iterating over properties in a .style object? Cause Webkit won't iterate over those.
 	var iterate = function(property) {
@@ -259,8 +259,8 @@ var self = window.PrefixFree = {
 			properties.push(property);
 			
 			var parts = property.split('-'),
-				prefix = parts[1];
-				
+			    prefix = parts[1];
+			
 			// Count prefix uses
 			prefixes[prefix] = ++prefixes[prefix] || 1;
 			
@@ -269,7 +269,7 @@ var self = window.PrefixFree = {
 				parts.pop();
 				
 				var shorthand = parts.join('-');
-
+				
 				if(supported(shorthand) && properties.indexOf(shorthand) === -1) {
 					properties.push(shorthand);
 				}
@@ -291,12 +291,12 @@ var self = window.PrefixFree = {
 			iterate(StyleFix.deCamelCase(property));
 		}
 	}
-
+	
 	// Find most frequently used prefix
 	var highest = {uses:0};
 	for(var prefix in prefixes) {
 		var uses = prefixes[prefix];
-
+		
 		if(highest.uses < uses) {
 			highest = {prefix: prefix, uses: uses};
 		}
@@ -306,7 +306,7 @@ var self = window.PrefixFree = {
 	self.Prefix = StyleFix.camelCase(self.prefix);
 	
 	self.properties = [];
-
+	
 	// Get properties ONLY supported with a prefix
 	for(var i=0; i<properties.length; i++) {
 		var property = properties[i];
@@ -380,26 +380,26 @@ var style = document.createElement('div').style;
 function supported(value, property) {
 	style[property] = '';
 	style[property] = value;
-
+	
 	return !!style[property];
 }
 
-for (var func in functions) {
+for(var func in functions) {
 	var test = functions[func],
-		property = test.property,
-		value = func + '(' + test.params + ')';
+	    property = test.property,
+	    value = func + '(' + test.params + ')';
 	
-	if (!supported(value, property)
+	if(!supported(value, property) 
 	  && supported(self.prefix + value, property)) {
 		// It's supported, but with a prefix
 		self.functions.push(func);
 	}
 }
 
-for (var keyword in keywords) {
+for(var keyword in keywords) {
 	var property = keywords[keyword];
 
-	if (!supported(keyword, property)
+	if(!supported(keyword, property) 
 	  && supported(self.prefix + keyword, property)) {
 		// It's supported, but with a prefix
 		self.keywords.push(keyword);
