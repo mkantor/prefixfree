@@ -136,7 +136,7 @@ var self = window.StyleFix = {
 	},
 	
 	deCamelCase: function(str) {
-		return str.replace(/[A-Z]/g, function($0) { return '-' + $0.toLowerCase() });
+		return str.replace(/[A-Z]/g, function($0) { return '-' + $0.toLowerCase(); });
 	}
 };
 
@@ -200,7 +200,7 @@ var self = window.PrefixFree = {
 			var regex = RegExp('\\b(' + self.properties.join('|') + ')(?!:)', 'gi');
 			
 			css = fix('valueProperties', '\\b', ':(.+?);', function($0) {
-				return $0.replace(regex, prefix + "$1")
+				return $0.replace(regex, prefix + "$1");
 			}, css);
 		}
 		
@@ -233,7 +233,7 @@ var self = window.PrefixFree = {
 	
 	// Warning: Prefixes no matter what, even if the selector is supported prefix-less
 	prefixSelector: function(selector) {
-		return selector.replace(/^:{1,2}/, function($0) { return $0 + self.prefix })
+		return selector.replace(/^:{1,2}/, function($0) { return $0 + self.prefix; });
 	},
 	
 	// Warning: Prefixes no matter what, even if the property is supported prefix-less
@@ -279,12 +279,12 @@ var self = window.PrefixFree = {
 	},
 	supported = function(property) {
 		return StyleFix.camelCase(property) in dummy;
-	}
+	};
 	
 	// Some browsers have numerical indices for the properties, some don't
 	if(style.length > 0) {
 		for(var i=0; i<style.length; i++) {
-			iterate(style[i])
+			iterate(style[i]);
 		}
 	}
 	else {
@@ -463,7 +463,7 @@ root.removeChild(style);
 self.valueProperties = [
 	'transition',
 	'transition-property'
-]
+];
 
 // Add class for current prefix
 root.className += ' ' + self.prefix;
