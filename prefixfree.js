@@ -57,16 +57,13 @@ var self = window.StyleFix = {
 						css = css.replace(RegExp('\\b(behavior:\\s*?url\\(\'?"?)' + escaped_base, 'gi'), '$1');
 						}
 					
-					var style = document.createElement('style');
-					style.textContent = css;
-					style.media = link.media;
-					style.disabled = link.disabled;
-					style.setAttribute('data-href', link.getAttribute('href'));
+					self.applyStyleSheet(css, link.media, link.disabled, {
+						'data-href': link.getAttribute('href')
+					}, function(style) {
+						parent.insertBefore(style, link);
+					});
 					
-					parent.insertBefore(style, link);
 					parent.removeChild(link);
-					
-					style.media = link.media; // Duplicate is intentional. See issue #31
 				}
 		};
 
@@ -91,11 +88,14 @@ var self = window.StyleFix = {
 		if (style.hasAttribute('data-noprefix')) {
 			return;
 		}
-		var disabled = style.disabled;
 		
-		style.textContent = self.fix(style.textContent, true, style);
+		var css = self.fix(style.textContent, true, style);
 		
-		style.disabled = disabled;
+		self.applyStyleSheet(css, style.media, style.disabled, null, function(newStyle) {
+			style.parentNode.insertBefore(newStyle, style);
+		});
+		
+		style.parentNode.removeChild(style);
 	},
 
 	styleAttribute: function(element) {
@@ -104,6 +104,69 @@ var self = window.StyleFix = {
 		css = self.fix(css, false, element);
 		
 		element.setAttribute('style', css);
+	},
+	
+	applyStyleSheet: function(css, media, disabled, attributes, apply) {
+		// "a, b and c" combined with "d, e" yields:
+		// 	a and d,
+		// 	a and e,
+		// 	b and c and d,
+		// 	b and c and e
+		var combineMediaQueries = function(query1, query2) {
+			var parsedQuery1 = query1.split(/\s*,\s*/);
+			var parsedQuery2 = query2.split(/\s*,\s*/);
+			
+			var combinations = cartesianProduct(parsedQuery1, parsedQuery2);
+			
+			var combinedQuery = combinations.map(function(combination) {
+				// combination is a ['query', 'query'] pair
+				return combination.join(' and ');
+			}).join(', ');
+			
+			return combinedQuery;
+		};
+		var cartesianProduct = function(array1, array2) {
+			var product = [];
+			array2.forEach(function(element2) {
+				array1.forEach(function(element1) {
+					product.push([element1, element2]);
+				});
+			});
+			return product;
+		};
+		
+		var styleElement = document.createElement('style');
+		styleElement.textContent = css;
+		styleElement.media = media;
+		styleElement.disabled = disabled;
+		for (var attributeName in attributes) {
+			styleElement.setAttribute(attributeName, attributes[attributeName]);
+		}
+		
+		if (styleElement.styleSheet && styleElement.styleSheet.cssRules) {
+			// Append an HTMLStyleElement for each rule and manually 
+			// set its media property.
+			// This works around a @media bug in IE9. See issue #109.
+			// TODO: Aggregate CSSRules to add the smallest possible number 
+			// of style elements. Be mindful of their order.
+			for (var n = 0; n < styleElement.styleSheet.cssRules.length; n++) {
+				var cssRule = styleElement.styleSheet.cssRules[n];
+				
+				var singleRuleStyleElement = styleElement.cloneNode();
+				if (cssRule.media) {
+					singleRuleStyleElement.media = combineMediaQueries(singleRuleStyleElement.media, cssRule.media);
+				}
+				singleRuleStyleElement.textContent = cssRule.cssText;
+				
+				apply(singleRuleStyleElement);
+			}
+		}
+		else {
+			// Standards-compliant browsers don't have 
+			// HTMLStyleElement.styleSheet, but they don't need the 
+			// workaround.
+			apply(styleElement);
+		}
 	},
 	
 	process: function() {
