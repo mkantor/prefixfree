@@ -107,34 +107,6 @@ var self = window.StyleFix = {
 	},
 	
 	applyStyleSheet: function(css, media, disabled, attributes, apply) {
-		// "a, b and c" combined with "d, e" yields:
-		// 	a and d,
-		// 	a and e,
-		// 	b and c and d,
-		// 	b and c and e
-		var combineMediaQueries = function(query1, query2) {
-			var parsedQuery1 = query1.split(/\s*,\s*/);
-			var parsedQuery2 = query2.split(/\s*,\s*/);
-			
-			var combinations = cartesianProduct(parsedQuery1, parsedQuery2);
-			
-			var combinedQuery = combinations.map(function(combination) {
-				// combination is a ['query', 'query'] pair
-				return combination.join(' and ');
-			}).join(', ');
-			
-			return combinedQuery;
-		};
-		var cartesianProduct = function(array1, array2) {
-			var product = [];
-			array2.forEach(function(element2) {
-				array1.forEach(function(element1) {
-					product.push([element1, element2]);
-				});
-			});
-			return product;
-		};
-		
 		var styleElement = document.createElement('style');
 		styleElement.textContent = css;
 		styleElement.media = media;
@@ -147,15 +119,21 @@ var self = window.StyleFix = {
 			// Append an HTMLStyleElement for each rule and manually 
 			// set its media property.
 			// This works around a @media bug in IE9. See issue #109.
+			
 			// TODO: Aggregate CSSRules to add the smallest possible number 
-			// of style elements. Be mindful of their order.
+			// of style elements. Be mindful of their order. This is 
+			// important because IE9 has a limit of 31 stylesheets:
+			// http://support.microsoft.com/kb/262161
 			for (var n = 0; n < styleElement.styleSheet.cssRules.length; n++) {
 				var cssRule = styleElement.styleSheet.cssRules[n];
 				
 				var singleRuleStyleElement = styleElement.cloneNode();
 				if (cssRule.media) {
-					singleRuleStyleElement.media = combineMediaQueries(singleRuleStyleElement.media, cssRule.media);
+					singleRuleStyleElement.media = self.combineMediaQueryLists(singleRuleStyleElement.media, cssRule.media.mediaText);
 				}
+				// TODO: Could use cssRule.cssRules (a CSSRuleList) for 
+				// CSSMediaRules to avoid the unnecessary @media in 
+				// .cssText.
 				singleRuleStyleElement.textContent = cssRule.cssText;
 				
 				apply(singleRuleStyleElement);
@@ -166,6 +144,144 @@ var self = window.StyleFix = {
 			// HTMLStyleElement.styleSheet, but they don't need the 
 			// workaround.
 			apply(styleElement);
+		}
+	},
+	
+	// "a, b and c" combined with "d, e" yields:
+	// 	a and d,
+	// 	a and e,
+	// 	b and c and d,
+	// 	b and c and e
+	combineMediaQueryLists: function(queryList1, queryList2) {
+		var cartesianProduct = function(array1, array2) {
+			var product = [];
+			array2.forEach(function(element2) {
+				array1.forEach(function(element1) {
+					product.push([element1, element2]);
+				});
+			});
+			return product;
+		};
+		
+		var parsedQueryList1 = queryList1.split(/\s*,\s*/);
+		var parsedQueryList2 = queryList2.split(/\s*,\s*/);
+		
+		var combinations = cartesianProduct(parsedQueryList1, parsedQueryList2);
+		var combinedQuery = combinations.map(function(combination) {
+			// Combination is a ['query', 'query'] pair.
+			return self.combineMediaQueries(combination[0], combination[1]);
+		}).join(', ');
+		
+		return combinedQuery;
+	},
+	
+	combineMediaQueries: function(query1, query2) {
+		// Matches 'all' and 'all and '.
+		var impliedAll = /^all\b(?:\s*and\b)?\s*/i;
+		
+		query1 = query1.replace(impliedAll, '').trim();
+		query2 = query2.replace(impliedAll, '').trim();
+		
+		// If one of the queries is empty, just use the other one.
+		if (!(query1 && query2)) {
+			return query1 || query2;
+		}
+		else {
+			/* FIXME:
+				There's no such thing as "and" as far as media TYPES go 
+				(e.g. "screen and print" is meaningless/invalid). Media 
+				types also always need to occur at the start of the query 
+				(e.g. "(min-width:600px) and screen" is illegal).
+				
+				The grammar from the spec is as follows:
+					media_query_list
+					 : S* [media_query [ ',' S* media_query ]* ]?
+					 ;
+					media_query
+					 : [ONLY | NOT]? S* media_type S* [ AND S* expression ]*
+					 | expression [ AND S* expression ]*
+					 ;
+					media_type
+					 : IDENT
+					 ;
+					expression
+					 : '(' S* media_feature S* [ ':' S* expr ]? ')' S*
+					 ;
+					media_feature
+					 : IDENT
+					 ;
+				
+				Currently-specified media types are:
+					- aural
+					- braille
+					- handheld
+					- print
+					- projection
+					- screen
+					- tty
+					- tv
+					- embossed
+				
+				Things that need to be dealt with (this list is probably 
+				not comprehensive):
+					- If only one of the queries has a type then it needs 
+					  to go first.
+						- Can simply be "if query2 begins with a media 
+						  type put it first".
+					- If both begin with the same media type it needs to 
+					  only occur once.
+						- Be wary of "only" and "not".
+					- If both begin with different types (without "not") 
+					  then it doesn't really matter what prefixfree does 
+					  because the query would never be true anyway.
+						- Unless there are any cases where a browser can 
+						  respond to multiple media types simultaneously; 
+						  this isn't prohibited by the spec, and it 
+						  wouldn't be too crazy for e.g. something like 
+						  a phone to to respond to both "handheld" and 
+						  "screen".
+					- Deal with "not".
+						- This will be incredibly complicated:
+							<style media="not screen">
+								@media (monochrome) {...}
+							</style>
+							- Means:
+								(not screen) and (monochrome)
+							- But will be compiled to:
+								"not screen and (monochrome)"
+							- Which means:
+								not (screen and (monochrome))
+							- Would have to list out all non-screen 
+							  types to accurately represent it:
+								"aural and (monochrome), braille and (monochrome), handheld and (monochrome), print and (monochrome), ..."
+						- Type-only queries with one "not" are simpler:
+							<style media="not screen">
+								@media print {...}
+							</style>
+							- Should just become:
+								"print"
+						- But type-only queries where both have "not" 
+						  get complex again:
+							<style media="not screen">
+								@media not print {...}
+							</style>
+							- Should become:
+								"aural, braille, handheld, projection, ..." (every type except screen and print)
+						- Two of the same type with one "not" need to 
+						  become "not all":
+							<style media="not screen">
+								@media screen {...}
+							</style>
+							- Should become:
+								"not all"
+					- Deal with "only".
+						- Can it just always be dropped?
+						- Maybe all combined queries should get an "only" 
+						  tacked on to hide them from older browsers that 
+						  won't support "and".
+			*/
+			
+			return query1 + ' and ' + query2;
 		}
 	},
 	
